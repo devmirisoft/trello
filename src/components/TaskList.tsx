@@ -1,7 +1,15 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Camera, Check, CheckCircle2, MoveRight, Pencil, X } from "lucide-react";
+import {
+  Camera,
+  Check,
+  CheckCircle2,
+  ChevronRight,
+  MoveRight,
+  Pencil,
+  X,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useLongPress } from "@/hooks/useLongPress";
 import { formatFriendly, toLocalISODate } from "@/lib/dates";
@@ -12,7 +20,7 @@ export type BulkAction = "done" | "update" | "move";
 
 type Props = {
   cards: TrelloCard[];
-  /** The board's open lists, rendered as columns in this order. */
+  /** The board's open lists, rendered as collapsed rows in this order. */
   lists: TrelloList[];
   /** Runs the action against the server; resolves when the list is stale. */
   onAction: (action: BulkAction, cardIds: string[]) => void | Promise<void>;
@@ -152,54 +160,57 @@ export default function TaskList({
           No open cards here yet. Photograph a list to add some.
         </p>
       ) : (
-        <div
-          data-testid="board-lists"
-          className="-mx-4 flex snap-x gap-3 overflow-x-auto px-4 pb-2"
-        >
+        <div data-testid="board-lists" className="space-y-2">
           {columns.map((column) => (
-            <section
-              key={column.id}
-              data-testid={`list-${column.id}`}
-              className="w-64 shrink-0 snap-start"
-            >
-              <h2 className="mb-2 flex items-baseline gap-2 px-1">
-                <span className="truncate text-sm font-semibold">
-                  {column.name}
-                </span>
-                <span className="text-xs text-muted-foreground">
-                  {column.cards.length}
-                </span>
-              </h2>
+            <section key={column.id} data-testid={`list-${column.id}`}>
+              {/* Native disclosure: the browser already does click-to-open,
+                  keyboard and aria-expanded, so there is no open state to
+                  hold here and nothing to keep in sync. */}
+              <details className="group rounded-xl border border-border bg-card">
+                <summary className="flex min-h-[56px] cursor-pointer list-none items-center gap-2 px-4 py-3 active:bg-muted [&::-webkit-details-marker]:hidden">
+                  <ChevronRight className="size-4 shrink-0 text-muted-foreground transition-transform group-open:rotate-90" />
+                  <h2 className="flex min-w-0 flex-1 items-baseline gap-2">
+                    <span className="truncate text-sm font-semibold">
+                      {column.name}
+                    </span>
+                    <span className="text-xs text-muted-foreground">
+                      {column.cards.length}
+                    </span>
+                  </h2>
+                </summary>
 
-              {column.cards.length === 0 ? (
-                <p className="px-1 text-xs text-muted-foreground">Nothing here.</p>
-              ) : (
-                <ul
-                  role="listbox"
-                  aria-multiselectable
-                  aria-label={column.name}
-                  className="space-y-2"
-                >
-                  {column.cards.map((card, i) => (
-                    <TaskRow
-                      key={card.id}
-                      card={card}
-                      index={i}
-                      selected={selected.includes(card.id)}
-                      selectionMode={selectionMode}
-                      onLongPress={() => {
-                        if (!selected.includes(card.id)) toggle(card.id);
-                      }}
-                      onTap={() => {
-                        // Outside selection mode a tap is just a tap — the
-                        // long press is the only way in, so scrolling never
-                        // selects anything.
-                        if (selectionMode) toggle(card.id);
-                      }}
-                    />
-                  ))}
-                </ul>
-              )}
+                <div className="border-t border-border p-3">
+                  {column.cards.length === 0 ? (
+                    <p className="text-xs text-muted-foreground">Nothing here.</p>
+                  ) : (
+                    <ul
+                      role="listbox"
+                      aria-multiselectable
+                      aria-label={column.name}
+                      className="space-y-2"
+                    >
+                      {column.cards.map((card, i) => (
+                        <TaskRow
+                          key={card.id}
+                          card={card}
+                          index={i}
+                          selected={selected.includes(card.id)}
+                          selectionMode={selectionMode}
+                          onLongPress={() => {
+                            if (!selected.includes(card.id)) toggle(card.id);
+                          }}
+                          onTap={() => {
+                            // Outside selection mode a tap is just a tap — the
+                            // long press is the only way in, so scrolling never
+                            // selects anything.
+                            if (selectionMode) toggle(card.id);
+                          }}
+                        />
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              </details>
             </section>
           ))}
         </div>

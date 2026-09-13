@@ -124,6 +124,10 @@ export const fetchLists = (creds: TrelloCreds, boardId: string) =>
 export const fetchMembers = (creds: TrelloCreds, boardId: string) =>
   request<TrelloMember[]>(creds, `/boards/${boardId}/members?fields=all`);
 
+/** Every open card on the board, whoever it belongs to. */
+export const fetchBoardCards = (creds: TrelloCreds, boardId: string) =>
+  request<TrelloCard[]>(creds, `/boards/${boardId}/cards?filter=open`);
+
 export const fetchMemberCards = (
   creds: TrelloCreds,
   boardId: string,

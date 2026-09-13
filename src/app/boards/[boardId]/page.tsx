@@ -4,39 +4,18 @@ import { ChevronLeft } from "lucide-react";
 import TaskScreen from "@/components/TaskScreen";
 import { currentUser } from "@/lib/session-server";
 import { requireCreds } from "@/lib/server";
-import {
-  fetchBoards,
-  fetchLists,
-  fetchMemberCards,
-  fetchMembers,
-  type TrelloMember,
-} from "@/lib/trello";
+import { fetchBoardCards, fetchBoards, fetchLists } from "@/lib/trello";
 
 export const dynamic = "force-dynamic";
 
-/** Who the board is being viewed as. `?member=` wins, then the Trello account
- * this session connected with, then whoever is first — a board always has
- * somebody selected, so the view is never in a half state. */
-function pickMember(
-  members: TrelloMember[],
-  requested: string | string[] | undefined,
-  self: string | null | undefined
-): string {
-  const wanted = Array.isArray(requested) ? requested[0] : requested;
-  const has = (id?: string | null) =>
-    id && members.some((m) => m.id === id) ? id : undefined;
-  return has(wanted) ?? has(self) ?? members[0]?.id ?? "";
-}
-
 export default async function BoardPage({
   params,
-  searchParams,
 }: PageProps<"/boards/[boardId]">) {
   const user = await currentUser();
   if (!user) redirect("/login");
   if (!user.trello) redirect("/connect");
 
-  const [{ boardId }, query] = await Promise.all([params, searchParams]);
+  const { boardId } = await params;
   const creds = requireCreds(user);
 
   // Checked before anything board-scoped is fetched: a board this account
@@ -45,18 +24,12 @@ export default async function BoardPage({
   const board = boards.find((b) => b.id === boardId);
   if (!board) notFound();
 
-  const [lists, members] = await Promise.all([
+  // The whole board, whoever the cards belong to — the list is for picking
+  // existing work out of, so filtering it to one person only hides some.
+  const [lists, cards] = await Promise.all([
     fetchLists(creds, boardId),
-    fetchMembers(creds, boardId),
+    fetchBoardCards(creds, boardId),
   ]);
-
-  const memberId = pickMember(members, query.member, user.trelloMemberId);
-  // The dropdown is both a filter and the assignee for the next capture, so
-  // the cards it shows are fetched for whoever it currently names.
-  const cards = memberId
-    ? await fetchMemberCards(creds, boardId, memberId)
-    : [];
-  const member = members.find((m) => m.id === memberId);
 
   return (
     <main className="safe-top mx-auto w-full max-w-md px-4 pb-28">
@@ -73,12 +46,9 @@ export default async function BoardPage({
 
       <TaskScreen
         boardId={boardId}
-        memberId={memberId}
-        memberName={member?.fullName || member?.username || "this person"}
-        members={members.map((m) => ({
-          id: m.id,
-          name: m.fullName || m.username,
-        }))}
+        // Anything photographed is yours: the token that created it says who
+        // that is, so there is nothing to pick.
+        memberId={user.trelloMemberId ?? ""}
         cards={cards}
         lists={lists}
         boards={boards}

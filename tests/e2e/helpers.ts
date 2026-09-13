@@ -55,34 +55,24 @@ export async function signUpAndConnect(
   return username;
 }
 
-/** The dropdown pinned to the top of a board. */
-export const memberSelect = (page: Page) => page.getByLabel("Member");
-
-/** Whose cards the board is currently showing. */
-export const shownMember = (page: Page) =>
-  memberSelect(page).locator("option:checked").textContent();
-
-/** Point the board at someone and wait for their cards — the choice lives in
- * the URL, so this is a navigation, not just a form change. */
-export async function selectMember(page: Page, member: string) {
-  await memberSelect(page).selectOption({ label: member });
-  await page.waitForURL(/[?&]member=/);
-  await expect(memberSelect(page).locator("option:checked")).toHaveText(
-    new RegExp(member, "i")
-  );
+/** The board's lists start collapsed, so nothing inside one is visible until
+ * it is opened. Every card assertion wants them all open. */
+export async function openLists(page: Page) {
+  const summaries = page.getByTestId("board-lists").locator("summary");
+  for (let i = 0, total = await summaries.count(); i < total; i++) {
+    const summary = summaries.nth(i);
+    const open = await summary.evaluate(
+      (el) => (el.parentElement as HTMLDetailsElement).open
+    );
+    if (!open) await summary.click();
+  }
 }
 
-/** Board → that person's tasks on it. */
-export async function openTasks(page: Page, board: string, member: string) {
+/** Board → every card on it, lists opened. */
+export async function openTasks(page: Page, board: string) {
   await page.getByRole("link", { name: board }).click();
   await expect(page.getByRole("heading", { name: board })).toBeVisible();
-  await expect(memberSelect(page)).toBeVisible();
-  // The board may already have opened on them — asking again would be a
-  // no-op navigation this would then wait forever for.
-  const current = await shownMember(page);
-  if (!new RegExp(member, "i").test(current ?? "")) {
-    await selectMember(page, member);
-  }
+  await openLists(page);
 }
 
 /** A press held long enough to enter selection mode. Mouse input raises the

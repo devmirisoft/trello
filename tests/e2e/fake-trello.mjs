@@ -132,6 +132,15 @@ export function startFakeTrello(port = 0) {
       );
     }
 
+    m = path.match(/^\/1\/boards\/([^/]+)\/cards$/);
+    if (m) {
+      return json(
+        res,
+        200,
+        state.cards.filter((c) => c.idBoard === m[1] && !c.closed)
+      );
+    }
+
     m = path.match(/^\/1\/boards\/([^/]+)\/members\/([^/]+)\/cards$/);
     if (m) {
       const [, boardId, memberId] = m;

@@ -1,6 +1,7 @@
 import { expect, test } from "@playwright/test";
 import {
   connectTrello,
+  openLists,
   openTasks,
   register,
   resetTrello,
@@ -26,7 +27,7 @@ test("register, connect Trello, photograph a list, and see the new cards", async
 
   // 3. Boards, 4. the board itself, showing one person's cards.
   await expect(page.getByRole("heading", { name: "Boards" })).toBeVisible();
-  await openTasks(page, "Home", "Asha Rao");
+  await openTasks(page, "Home");
   await expect(page.getByText("Water the plants")).toBeVisible();
 
   // 6. Capture — the camera button sits at the bottom of the screen.
@@ -49,6 +50,7 @@ test("register, connect Trello, photograph a list, and see the new cards", async
 
   // 8. Confirm, and land back on the task list with the new card on it.
   await page.getByRole("button", { name: /create \d+ card/i }).click();
+  await openLists(page);
   await expect(page.getByText("Call the plumber")).toBeVisible();
   await expect(page.getByText("Water the plants")).toBeVisible();
 
@@ -65,7 +67,7 @@ test("a card confirmed without opening the date picker is due today", async ({
   request,
 }) => {
   await signUpAndConnect(page);
-  await openTasks(page, "Home", "Asha Rao");
+  await openTasks(page, "Home");
 
   await page.getByTestId("camera-fab").click();
   await page.getByRole("button", { name: /^capture$/i }).click();
@@ -77,6 +79,7 @@ test("a card confirmed without opening the date picker is due today", async ({
   await lines.first().fill("Due today by default");
   // Deliberately never touching the date picker.
   await page.getByRole("button", { name: /create \d+ card/i }).click();
+  await openLists(page);
   await expect(page.getByText("Due today by default")).toBeVisible();
 
   const { cards } = await trelloState(request);
@@ -122,7 +125,7 @@ test("changing your username mid-session keeps the session and Trello", async ({
   // No re-login: straight back to work, Trello still connected.
   await page.goto("/boards");
   await expect(page.getByRole("heading", { name: "Boards" })).toBeVisible();
-  await openTasks(page, "Home", "Asha Rao");
+  await openTasks(page, "Home");
   await expect(page.getByText("Water the plants")).toBeVisible();
 
   await page.goto("/settings");

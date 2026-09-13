@@ -19,7 +19,7 @@ test("long-press selects, and marking done sticks", async ({ page, request }, te
   test.skip(testInfo.project.name !== "mobile", "phone gesture");
 
   await signUpAndConnect(page);
-  await openTasks(page, "Home", "Asha Rao");
+  await openTasks(page, "Home");
 
   await expect(page.getByTestId("action-bar")).toHaveCount(0);
 
@@ -47,7 +47,7 @@ test("the camera button clears the bottom of the screen", async ({ page }, testI
   test.skip(testInfo.project.name !== "mobile", "phone layout");
 
   await signUpAndConnect(page);
-  await openTasks(page, "Home", "Asha Rao");
+  await openTasks(page, "Home");
 
   const box = (await page.getByTestId("camera-fab").boundingBox())!;
   const viewport = page.viewportSize()!;
@@ -63,7 +63,7 @@ test("moving to another board keeps the same person", async ({ page, request }, 
   test.skip(testInfo.project.name !== "mobile", "phone gesture");
 
   await signUpAndConnect(page);
-  await openTasks(page, "Home", "Asha Rao");
+  await openTasks(page, "Home");
 
   await longPress(page, '[data-testid="task-card-seed-1"]');
   await page.locator('[data-testid="task-card-seed-2"]').click();
@@ -71,9 +71,11 @@ test("moving to another board keeps the same person", async ({ page, request }, 
 
   const dialog = page.getByRole("dialog", { name: /move cards/i });
   await expect(dialog).toBeVisible();
-  // Work has Asha on it, so the assignment survives.
+  // Work has Asha on it, so the assignment survives untouched.
   await dialog.getByLabel("Board").selectOption({ label: "Work" });
-  await expect(dialog.getByText(/staying with asha rao/i)).toBeVisible();
+  await expect(
+    dialog.getByText(/keeping whoever they are assigned to now/i)
+  ).toBeVisible();
   await dialog.getByRole("button", { name: /^move$/i }).click();
 
   // Gone from this board's list, and on the other board still assigned.
@@ -87,37 +89,37 @@ test("moving to another board keeps the same person", async ({ page, request }, 
   }
 });
 
-test("moving to a board the person is not on warns before committing", async ({
+test("moving to a board the assignee is not on says so first", async ({
   page,
   request,
 }, testInfo) => {
   test.skip(testInfo.project.name !== "mobile", "phone gesture");
 
   await signUpAndConnect(page);
-  await openTasks(page, "Home", "Asha Rao");
+  await openTasks(page, "Home");
 
   await longPress(page, '[data-testid="task-card-seed-1"]');
   await page.getByRole("button", { name: /^move$/i }).click();
 
   const dialog = page.getByRole("dialog", { name: /move cards/i });
-  // Asha can see Shared Board but is not a member of it, so Trello would
-  // silently drop the assignment on arrival.
+  // The card belongs to Asha, who can see Shared Board but is not a member of
+  // it, so Trello would silently drop the assignment on arrival.
   await dialog.getByLabel("Board").selectOption({ label: "Shared Board" });
-  await expect(dialog.getByText(/not on this board/i)).toBeVisible();
+  await expect(
+    dialog.getByText(/someone these cards belong to is[\s\S]*not on this board/i)
+  ).toBeVisible();
 
-  await dialog.getByRole("button", { name: /^move$/i }).click();
-  await expect(dialog.getByRole("alert")).toContainText(/not a member of the target board/i);
-
-  // Nothing has moved yet: the warning is a stop, not a notice.
+  // Nothing has moved while the sheet is still open.
   let state = await trelloState(request);
   expect(state.cards.find((c) => c.id === "card-seed-1")!.idBoard).toBe("boardA");
 
-  await dialog.getByRole("button", { name: /move anyway/i }).click();
+  await dialog.getByRole("button", { name: /^move$/i }).click();
   await expect(page.getByText("Water the plants")).toHaveCount(0);
 
   state = await trelloState(request);
   const moved = state.cards.find((c) => c.id === "card-seed-1")!;
   expect(moved.idBoard).toBe("boardD");
+  // Exactly what the warning said would happen.
   expect(moved.idMembers).toEqual([]);
 });
 
@@ -125,7 +127,7 @@ test("reassigning sends the cards to someone else", async ({ page, request }, te
   test.skip(testInfo.project.name !== "mobile", "phone gesture");
 
   await signUpAndConnect(page);
-  await openTasks(page, "Home", "Asha Rao");
+  await openTasks(page, "Home");
 
   await longPress(page, '[data-testid="task-card-seed-1"]');
   await page.getByRole("button", { name: /^move$/i }).click();
@@ -135,9 +137,10 @@ test("reassigning sends the cards to someone else", async ({ page, request }, te
   await dialog.getByLabel(/assign to someone else/i).check();
   await dialog.getByLabel("New assignee").selectOption({ label: "Dev Kumar" });
   await dialog.getByRole("button", { name: /^move$/i }).click();
+  await expect(dialog).toHaveCount(0);
 
-  // It has left Asha's list because it now belongs to Dev.
-  await expect(page.getByText("Water the plants")).toHaveCount(0);
+  // It stays on the board — the board shows everyone's cards — but it is
+  // Dev's now.
   const { cards } = await trelloState(request);
   expect(cards.find((c) => c.id === "card-seed-1")!.idMembers).toEqual(["member3"]);
 });
@@ -154,7 +157,7 @@ test("prefers-reduced-motion turns the list animations off", async ({
   const page = await context.newPage();
   try {
     await signUpAndConnect(page);
-    await openTasks(page, "Home", "Asha Rao");
+    await openTasks(page, "Home");
 
     const row = page.locator('[data-testid="task-card-seed-1"]').locator("xpath=..");
     const { duration, delay } = await row.evaluate((el) => {

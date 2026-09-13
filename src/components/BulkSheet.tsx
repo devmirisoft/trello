@@ -12,9 +12,9 @@ type Props = {
   mode: SheetMode;
   count: number;
   boards: TrelloBoard[];
-  /** Who these cards currently belong to — the default on the way out. */
-  currentMemberId: string;
-  currentMemberName: string;
+  /** Everyone the chosen cards are assigned to, so a move can say up front
+   * that it would strand one of them. */
+  assignedTo: string[];
   onCancel: () => void;
   /** `applied` says whether anything actually changed: a warning that comes
    * back with nothing applied is a question, not a notice. */
@@ -27,8 +27,7 @@ export default function BulkSheet({
   mode,
   count,
   boards,
-  currentMemberId,
-  currentMemberName,
+  assignedTo,
   onCancel,
   onSubmit,
 }: Props) {
@@ -38,7 +37,7 @@ export default function BulkSheet({
 
   const [boardId, setBoardId] = useState(boards[0]?.id ?? "");
   const [reassign, setReassign] = useState(false);
-  const [memberId, setMemberId] = useState(currentMemberId);
+  const [memberId, setMemberId] = useState("");
   const [lists, setLists] = useState<TrelloList[]>([]);
   const [listId, setListId] = useState("");
   const [members, setMembers] = useState<TrelloMember[]>([]);
@@ -63,17 +62,25 @@ export default function BulkSheet({
       setLists(listData.lists ?? []);
       setListId(listData.lists?.[0]?.id ?? "");
       setMembers(memberData.members ?? []);
+      // Nobody is "current" any more, so the reassign picker starts on the
+      // target board's first member rather than on an empty value.
+      setMemberId(memberData.members?.[0]?.id ?? "");
     })();
     return () => {
       live = false;
     };
   }, [boardId, mode]);
 
-  const keepingMemberId = reassign ? memberId : currentMemberId;
+  // Left alone unless the user asks to reassign: the board shows everyone's
+  // cards now, so there is no single "current" person to re-apply. Trello
+  // keeps whichever assignees are also on the target board and drops the rest,
+  // so the people who have to be there are whoever holds the cards today.
+  const keepingMemberId = reassign ? memberId : undefined;
+  const needOnBoard = reassign ? (memberId ? [memberId] : []) : assignedTo;
   const assigneeMissing =
     mode === "move" &&
     members.length > 0 &&
-    !members.some((m) => m.id === keepingMemberId);
+    needOnBoard.some((id) => !members.some((m) => m.id === id));
 
   async function submit(confirmUnassigned = false) {
     setBusy(true);
@@ -207,14 +214,14 @@ export default function BulkSheet({
               </select>
             ) : (
               <p className="text-sm text-muted-foreground">
-                Staying with {currentMemberName}.
+                Keeping whoever they are assigned to now.
               </p>
             )}
 
             {assigneeMissing && (
               <p className="text-sm text-destructive">
-                That person is not on this board — Trello would drop the
-                assignment.
+                {reassign ? "That person is" : "Someone these cards belong to is"}{" "}
+                not on this board — Trello would drop the assignment.
               </p>
             )}
           </div>

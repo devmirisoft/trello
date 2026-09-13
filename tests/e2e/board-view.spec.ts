@@ -1,10 +1,10 @@
 import { expect, test } from "@playwright/test";
+import { TRELLO_STUB } from "../../playwright.config";
 import {
-  memberSelect,
+  ASHA_TOKEN,
+  openLists,
   openTasks,
   resetTrello,
-  selectMember,
-  shownMember,
   signUpAndConnect,
   trelloState,
 } from "./helpers";
@@ -13,52 +13,52 @@ test.beforeEach(async ({ request }) => {
   await resetTrello(request);
 });
 
-test("the board shows every list, and opens on the connected account", async ({
+test("the board shows every list, and everyone's cards inside them", async ({
   page,
 }) => {
   await signUpAndConnect(page);
   await page.getByRole("link", { name: "Home" }).click();
 
-  // Every open list on the board is a column, including the empty one — the
-  // columns come from the board, not from whichever cards happen to exist.
-  const columns = page.getByTestId("board-lists").locator("section");
-  await expect(columns).toHaveCount(2);
-  await expect(columns.nth(0)).toContainText("Inbox");
-  await expect(columns.nth(1)).toContainText("Doing");
+  // Every open list on the board is a row, including the empty one — the
+  // rows come from the board, not from whichever cards happen to exist.
+  const rows = page.getByTestId("board-lists").locator("section");
+  await expect(rows).toHaveCount(2);
+  await expect(rows.nth(0)).toContainText("Inbox");
+  await expect(rows.nth(1)).toContainText("Doing");
 
-  // No picking a person first: the token belongs to Asha, so it opens on her.
-  await expect(memberSelect(page)).toBeVisible();
-  expect(await shownMember(page)).toMatch(/asha rao/i);
+  // Collapsed until asked: the cards only appear once a list is opened.
+  await expect(page.getByText("Water the plants")).toBeHidden();
+  await openLists(page);
+
+  // Nothing to pick first: the whole board is there, and there is no member
+  // control to get past.
   await expect(page.getByText("Water the plants")).toBeVisible();
+  await expect(page.getByLabel("Member")).toHaveCount(0);
 });
 
-test("the member dropdown filters the board to that person", async ({
-  page,
-}) => {
-  await signUpAndConnect(page);
-  await openTasks(page, "Home", "Asha Rao");
-  await expect(page.getByText("Water the plants")).toBeVisible();
-
-  // Dev is on this board but has none of its cards.
-  await selectMember(page, "Dev Kumar");
-  await expect(page.getByText("Water the plants")).toHaveCount(0);
-  await expect(page.getByText(/no open cards/i)).toBeVisible();
-
-  // And back again, without losing anything.
-  await selectMember(page, "Asha Rao");
-  await expect(page.getByText("Water the plants")).toBeVisible();
-});
-
-test("the dropdown also names who the next capture is assigned to", async ({
+test("the board shows cards that belong to other people too", async ({
   page,
   request,
 }) => {
   await signUpAndConnect(page);
-  await openTasks(page, "Home", "Asha Rao");
 
-  // The same control that filtered the board decides the assignee — that is
-  // the second of its two jobs, asserted separately from the filtering.
-  await selectMember(page, "Dev Kumar");
+  // Seeded onto Home as Dev's, so it can only appear if the board is not
+  // being filtered to the connected account.
+  await request.post(`${TRELLO_STUB}/1/cards?key=key-any&token=${ASHA_TOKEN}`, {
+    params: { idList: "listA1", name: "Dev's own card", idMembers: "member3" },
+  });
+
+  await openTasks(page, "Home");
+  await expect(page.getByText("Dev's own card")).toBeVisible();
+  await expect(page.getByText("Water the plants")).toBeVisible();
+});
+
+test("a captured card is assigned to the connected account", async ({
+  page,
+  request,
+}) => {
+  await signUpAndConnect(page);
+  await openTasks(page, "Home");
 
   await page.getByTestId("camera-fab").click();
   await page.getByRole("button", { name: /^capture$/i }).click();
@@ -70,16 +70,17 @@ test("the dropdown also names who the next capture is assigned to", async ({
   await page.getByLabel(/add to list/i).selectOption({ label: "Doing" });
 
   const lines = page.getByTestId("preview-lines").getByRole("textbox");
-  await lines.first().fill("Dev's new task");
+  await lines.first().fill("A brand new task");
   await page.getByRole("button", { name: /create \d+ card/i }).click();
 
-  // It belongs to Dev now, so it shows up on the board as his.
-  await expect(page.getByText("Dev's new task")).toBeVisible();
+  await openLists(page);
+  await expect(page.getByText("A brand new task")).toBeVisible();
 
   const { cards } = await trelloState(request);
-  const created = cards.find((c) => c.name === "Dev's new task")!;
+  const created = cards.find((c) => c.name === "A brand new task")!;
   expect(created.idList).toBe("listA2");
-  expect(created.idMembers).toEqual(["member3"]);
+  // The token belongs to Asha, so the card does too — no dropdown involved.
+  expect(created.idMembers).toEqual(["member1"]);
 });
 
 test("each preview card carries its own date, and the batch one fills the rest", async ({
@@ -87,7 +88,7 @@ test("each preview card carries its own date, and the batch one fills the rest",
   request,
 }) => {
   await signUpAndConnect(page);
-  await openTasks(page, "Home", "Asha Rao");
+  await openTasks(page, "Home");
 
   await page.getByTestId("camera-fab").click();
   await page.getByRole("button", { name: /^capture$/i }).click();
@@ -111,6 +112,7 @@ test("each preview card carries its own date, and the batch one fills the rest",
   const batch = await pickADay(page, "Due date for all", own);
 
   await page.getByRole("button", { name: /create \d+ card/i }).click();
+  await openLists(page);
   await expect(page.getByText("Has its own date")).toBeVisible();
 
   const { cards } = await trelloState(request);

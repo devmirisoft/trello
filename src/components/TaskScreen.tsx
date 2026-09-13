@@ -7,7 +7,6 @@ import OcrProgress from "./OcrProgress";
 import CardPreviewList from "./CardPreviewList";
 import TaskList, { type BulkAction } from "./TaskList";
 import BulkSheet, { type SheetMode } from "./BulkSheet";
-import MemberSelect, { type MemberOption } from "./MemberSelect";
 import { Button } from "@/components/ui/button";
 import {
   recognizeText,
@@ -18,10 +17,8 @@ import type { TrelloBoard, TrelloCard, TrelloList } from "@/lib/trello";
 
 type Props = {
   boardId: string;
+  /** Who a photographed card gets assigned to: the connected account. */
   memberId: string;
-  memberName: string;
-  /** Everyone on this board, for the dropdown at the top. */
-  members: MemberOption[];
   cards: TrelloCard[];
   lists: TrelloList[];
   boards: TrelloBoard[];
@@ -32,8 +29,6 @@ type Capture = "off" | "camera" | "ocr" | "preview";
 export default function TaskScreen({
   boardId,
   memberId,
-  memberName,
-  members,
   cards,
   lists,
   boards,
@@ -151,8 +146,6 @@ export default function TaskScreen({
         </p>
       )}
 
-      <MemberSelect members={members} value={memberId} />
-
       <TaskList
         cards={cards}
         lists={lists}
@@ -166,8 +159,13 @@ export default function TaskScreen({
           mode={sheet.mode}
           count={sheet.ids.length}
           boards={boards}
-          currentMemberId={memberId}
-          currentMemberName={memberName}
+          assignedTo={[
+            ...new Set(
+              cards
+                .filter((c) => sheet.ids.includes(c.id))
+                .flatMap((c) => c.idMembers)
+            ),
+          ]}
           onCancel={() => setSheet(null)}
           onSubmit={async (payload) => {
             const data = await sendBulk(sheet.mode, sheet.ids, payload);

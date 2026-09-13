@@ -1,6 +1,5 @@
 import { expect, test } from "@playwright/test";
 import {
-  memberSelect,
   openTasks,
   resetTrello,
   SAM_TOKEN,
@@ -35,15 +34,12 @@ test("two users see only their own boards, members and tasks", async ({
     await expect(sam.getByRole("link", { name: "Work" })).toHaveCount(0);
 
     // Members and tasks follow the same boundary.
-    await openTasks(asha, "Home", "Asha Rao");
+    await openTasks(asha, "Home");
     await expect(asha.getByText("Water the plants")).toBeVisible();
 
-    await sam.getByRole("link", { name: "Sam Only" }).click();
-    await expect(memberSelect(sam)).toBeVisible();
-    // The dropdown offers only the people on the board his token can see.
-    expect(await memberSelect(sam).locator("option").allTextContents()).toEqual([
-      "Sam Patel",
-    ]);
+    await openTasks(sam, "Sam Only");
+    // His own board, and none of Asha's work on it.
+    await expect(sam.getByText("Water the plants")).toHaveCount(0);
 
     // Sam cannot reach Asha's board by typing the URL either: it is not a
     // board his token can see, so he gets the not-found page and none of her

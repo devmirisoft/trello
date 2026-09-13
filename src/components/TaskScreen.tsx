@@ -8,11 +8,7 @@ import CardPreviewList from "./CardPreviewList";
 import TaskList, { type BulkAction } from "./TaskList";
 import BulkSheet, { type SheetMode } from "./BulkSheet";
 import { Button } from "@/components/ui/button";
-import {
-  recognizeText,
-  splitIntoTaskLines,
-  type OcrProgress as OcrProgressT,
-} from "@/lib/ocr";
+import { recognizeText, splitIntoTaskLines } from "@/lib/ocr";
 import type { TrelloBoard, TrelloCard, TrelloList } from "@/lib/trello";
 
 type Props = {
@@ -37,10 +33,6 @@ export default function TaskScreen({
   const [capture, setCapture] = useState<Capture>("off");
   const [photoUrl, setPhotoUrl] = useState<string | null>(null);
   const [lines, setLines] = useState<string[]>([]);
-  const [progress, setProgress] = useState<OcrProgressT>({
-    status: "starting",
-    progress: 0,
-  });
 
   const [sheet, setSheet] = useState<{ mode: SheetMode; ids: string[] } | null>(
     null
@@ -88,11 +80,12 @@ export default function TaskScreen({
   async function runPhoto(file: File) {
     setPhotoUrl(URL.createObjectURL(file));
     setCapture("ocr");
-    setProgress({ status: "starting", progress: 0 });
+    setNotice(null);
     try {
-      setLines(splitIntoTaskLines(await recognizeText(file, setProgress)));
-    } catch {
+      setLines(splitIntoTaskLines(await recognizeText(file)));
+    } catch (err) {
       setLines([]);
+      setNotice((err as Error).message);
     }
     setCapture("preview");
   }
@@ -116,10 +109,14 @@ export default function TaskScreen({
           </Button>
         </div>
 
-        {capture === "camera" && <CameraCapture onCapture={runPhoto} />}
-        {capture === "ocr" && (
-          <OcrProgress progress={progress.progress} status={progress.status} />
+        {notice && (
+          <p role="alert" className="mb-3 text-sm text-destructive">
+            {notice}
+          </p>
         )}
+
+        {capture === "camera" && <CameraCapture onCapture={runPhoto} />}
+        {capture === "ocr" && <OcrProgress />}
         {capture === "preview" && (
           <CardPreviewList
             boardId={boardId}

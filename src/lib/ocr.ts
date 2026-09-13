@@ -1,39 +1,18 @@
-import { createWorker } from "tesseract.js";
-
-export type OcrProgress = {
-  status: string;
-  progress: number; // 0..1
-};
-
 /**
- * Runs OCR on an image (File/Blob/data URL) entirely in the browser via
- * Tesseract.js (WASM) — no server, no API key, nothing leaves the device.
- * Note: the first run downloads the English language data (a few MB) from
- * the network; after that the browser caches it for offline reuse.
+ * Reads a photographed to-do list. The image goes to /api/scan, which asks
+ * Groq's vision model for the tasks — nothing runs in the browser.
  */
-export async function recognizeText(
-  image: File | Blob | string,
-  onProgress?: (p: OcrProgress) => void
-): Promise<string> {
-  const worker = await createWorker("eng", 1, {
-    logger: (m) => {
-      if (onProgress && typeof m.progress === "number") {
-        onProgress({ status: m.status, progress: m.progress });
-      }
-    },
-  });
-  try {
-    const {
-      data: { text },
-    } = await worker.recognize(image);
-    return text;
-  } finally {
-    await worker.terminate();
-  }
+export async function recognizeText(image: File | Blob): Promise<string> {
+  const body = new FormData();
+  body.append("image", image);
+  const res = await fetch("/api/scan", { method: "POST", body });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error ?? `Scan failed (${res.status})`);
+  return data.text as string;
 }
 
 /**
- * Splits raw OCR text into candidate task lines: trims whitespace, drops
+ * Splits the model's reply into candidate task lines: trims whitespace, drops
  * empty lines, strips common list markers ("-", "*", "1.", "•", "[ ]")
  * so the leftover reads like a clean task title.
  */

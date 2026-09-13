@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { Settings } from "lucide-react";
+import InstallButton from "@/components/InstallButton";
 import { currentUser } from "@/lib/session-server";
 import { requireCreds } from "@/lib/server";
 import { fetchBoards } from "@/lib/trello";
@@ -19,7 +20,8 @@ export default async function BoardsPage() {
   return (
     <main className="safe-top mx-auto w-full max-w-md px-4 pb-24">
       <header className="mb-4 flex items-center justify-between gap-2">
-        <h1 className="text-2xl font-semibold">Boards</h1>
+        <h1 className="mr-auto text-2xl font-semibold">Boards</h1>
+        <InstallButton />
         <Link
           href="/settings"
           aria-label="Settings"

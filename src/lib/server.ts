@@ -54,6 +54,9 @@ function describeMongoError(err: unknown): string | null {
   switch (err.name) {
     case "MongoParseError":
       return "MONGODB_URI is not a valid MongoDB connection string.";
+    case "MongoInvalidArgumentError":
+      // Names the offending option only — never a host or a credential.
+      return `MONGODB_URI was rejected by the driver: ${err.message}`;
     case "MongoServerSelectionError":
     case "MongoNetworkError":
     case "MongoNetworkTimeoutError":

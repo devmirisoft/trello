@@ -6,8 +6,7 @@ const PROMPT =
   "Read this photo of a to-do list. Reply with the tasks only, one per line, " +
   "verbatim, no numbering, no bullets, no commentary. If there are no tasks, reply with nothing.";
 
-/** Sends the photo to Groq's vision model and returns its raw text reply.
- * GROQ_MODEL is the app's text model, so scanning takes its own variable. */
+/** Sends the photo to Groq and returns its raw text reply. */
 export async function POST(request: Request) {
   return jsonRoute(async () => {
     await requireUser(request);
@@ -30,10 +29,10 @@ export async function POST(request: Request) {
         "content-type": "application/json",
       },
       body: JSON.stringify({
-        model:
-          process.env.GROQ_VISION_MODEL ||
-          "meta-llama/llama-4-scout-17b-16e-instruct",
+        model: process.env.GROQ_MODEL || "qwen/qwen3.8-27b",
         temperature: 0,
+        // A task list is short, and the free tier caps output tokens per minute.
+        max_tokens: 500,
         messages: [
           {
             role: "user",

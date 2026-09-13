@@ -1,137 +1,172 @@
 # Trello Snap
 
-A small PWA: pick a board, a list and the person the work is for, photograph a
-handwritten to-do list, and it OCRs the text on your phone, previews one Trello
-card per line, and creates them all — assigned to that person with a shared due
-date. No typing.
+A small multi-user PWA: sign in, connect your own Trello account, open a board,
+photograph a handwritten to-do list, and it OCRs the text on your phone,
+previews one Trello card per line — each with its own title and its own date —
+and creates them all, assigned to the person the board is set to, in the list
+you chose.
 
-The flow is: **board → person → camera → OCR → card preview → confirm.**
+The flow is:
 
-The app is locked behind a single shared passcode. Unlock it once and every
-later visit goes straight to the camera — the Trello credentials come from the
-database, so there is nothing to re-enter on a new device.
+**login → boards → a board → camera → OCR → preview → confirm.**
 
-- OCR runs **on your device** in the browser via [Tesseract.js](https://github.com/naptha/tesseract.js) (WebAssembly). No image or text is ever sent to any server of mine.
-- Your Trello API key + token are stored in **MongoDB** and handed to the browser only after the passcode check. Cards are still created by calling `api.trello.com` **directly from the browser** (the same way Trello's own Power-Ups work) — the backend only custodies the credentials, it is not a Trello proxy.
-- This is single-tenant by design: one passcode, one stored config, one row. That row is
-  `{ _id: "config", id, passcodeHash, trello: { apiKey, token, board…, list…, member… } }` —
-  the key and token live in the same record as the passcode that unlocks them, so they
-  cannot drift apart from it. `id` is a `randomUUID` identifying the credential record
-  (`_id` is the same constant on every install); records written before `id` existed are
-  backfilled on the next read. The Settings screen shows it as the Credential ID.
+The board shows its lists side by side, with a member dropdown pinned to the
+top and the camera button at the bottom. That dropdown does two jobs: it
+filters the board to one person's cards, and it names who the next capture is
+assigned to. The choice lives in the URL (`?member=`), so a reload — or a
+shared link — lands on the same person.
 
-## 1. Get a Trello API key and token
+Each previewed card carries its own due date. The batch date picker above them
+is the default for every card that has not been given one of its own; moving it
+fills the blanks and leaves the rest alone.
 
-1. Go to <https://trello.com/power-ups/admin/new>, log in, and create a new Power-Up/integration (name doesn't matter — e.g. "Trello Snap"). This gives you an **API key**.
-2. In the app itself, after you paste the API key, it will show you a link like:
-   `https://trello.com/1/authorize?expiration=never&scope=read,write&response_type=token&key=YOUR_KEY`
-   Open it, click **Allow**, and copy the **token** it gives you.
-3. The first time you open the app it asks you to choose a passcode, then to paste both of these, pick which board and list new cards go into, and pick which board member the cards get assigned to. After that you only ever type the passcode.
+- OCR runs **on your device** in the browser via
+  [Tesseract.js](https://github.com/naptha/tesseract.js) (WebAssembly). No
+  image is ever uploaded.
+- Every Trello call is made **server-side**. The browser never receives a
+  Trello key or token — it talks only to this app's own API, which loads the
+  calling user's credentials, decrypts them in memory, and proxies the request.
+- Credentials are encrypted at rest with AES-256-GCM under `ENCRYPTION_KEY`.
+- Accounts key off the MongoDB `_id`. The session JWT carries `sub: <userId>`
+  and nothing else — no username — so changing your username or password never
+  signs you out and never orphans your Trello connection.
 
-Keep the token private — anyone with your key + token can read/write your Trello boards. If it's ever exposed, revoke it from <https://trello.com/app-key> (or your Trello account settings) and generate a new one.
-
-## 2. Run it locally
+## 1. Run it
 
 ```bash
 npm install
-cp .env.local.example .env.local   # then fill in MONGODB_URI and SESSION_SECRET
+cp .env.local.example .env.local   # fill in all four variables
 npm run dev
 ```
 
-`MONGODB_URI` and `SESSION_SECRET` are required; a missing one makes the API
-routes answer with a 500 naming the variable. See `.env.local.example`.
+| Variable         | Required | What it is                                            |
+| ---------------- | -------- | ----------------------------------------------------- |
+| `MONGODB_URI`    | yes      | MongoDB connection string                              |
+| `MONGODB_DB`     | no       | Database name, defaults to `trello-snap`               |
+| `SESSION_SECRET` | yes      | Signs the session JWT (HS256)                          |
+| `ENCRYPTION_KEY` | yes      | 32 bytes, base64 — encrypts each user's Trello secrets |
+| `TRELLO_API_BASE`| no       | Overrides the Trello base URL; the tests point it at a stub |
 
-Set `TRELLO_API_KEY` and `TRELLO_TOKEN` too and there is no setup screen at
-all: on login the **server** resolves the board, list and assignee itself
-(defaulting to your first open board, its first list, and the token's owner),
-saves the result, and you land straight on the capture screen. Pin
-`TRELLO_BOARD_ID` / `TRELLO_LIST_ID` / `TRELLO_MEMBER_ID` to override those
-defaults — but a pinned value can't then be changed from the Settings screen.
-Leave the key and token unset and the app falls back to the manual setup form.
-
-Open <http://localhost:3000>. Note: camera capture and PWA install require **HTTPS** (or `localhost`, which browsers treat as secure) — `localhost` is fine for testing, but to try it on your phone during dev you'll need a tunnel (e.g. `npx ngrok http 3000`) or just deploy it (step 3), which is quick and gives you a permanent link anyway.
-
-## 3. Deploy to Vercel
-
-The easiest path:
+Generate the two secrets:
 
 ```bash
-npm install -g vercel   # if you don't have it
-vercel login
-vercel                  # first deploy, follow the prompts
-vercel --prod           # promote to your production URL
+node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"     # SESSION_SECRET
+node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"  # ENCRYPTION_KEY
 ```
 
-Or without the CLI: push this folder to a GitHub repo and import it at <https://vercel.com/new> — Vercel auto-detects Next.js, no config needed. Either way you get a real `https://...vercel.app` URL.
+Changing `ENCRYPTION_KEY` makes every stored Trello connection unreadable and
+everyone has to reconnect. Changing `SESSION_SECRET` signs everyone out.
 
-## 4. Install it on your phone
+## 2. Connect Trello
 
-Open the deployed URL in your phone's browser:
+Each person does this once, for their own account:
 
-- **Android (Chrome)**: menu → "Add to Home screen" / "Install app".
-- **iPhone (Safari)**: Share button → "Add to Home Screen".
+1. Create an integration at <https://trello.com/power-ups/admin/new> to get an
+   **API key**.
+2. Authorise it to get a **token**:
+   `https://trello.com/1/authorize?expiration=never&name=TrelloSnap&scope=read,write&response_type=token&key=YOUR_KEY`
+3. Paste both into the Connect screen. They are validated against
+   `GET /1/members/me` before being saved, then encrypted.
 
-Once installed it opens full-screen like a native app.
+Anyone holding your key and token can read and write your boards. Revoke a
+leaked one from <https://trello.com/app-key>.
 
-## How it works
+## 3. API
 
-1. **Take a photo** of your notes (or pick one from your gallery).
-2. It runs on-device OCR and splits the recognized text into lines, stripping bullets/numbers (`-`, `*`, `1.`, `[ ]`, etc.).
-3. You get an editable checklist: uncheck anything that isn't really a task, fix typos, or add a line the OCR missed.
-4. Pick **Today**, **Tomorrow**, or any date.
-5. Tap **Create N cards** — each checked line becomes a separate Trello card in your configured list, due at 6pm local time on the chosen date.
+All routes require a session cookie; the Trello ones also require saved
+credentials and answer `Trello not connected.` without them.
 
-You can change which board/list new cards go to any time from the **Settings** link in the top-right corner.
+| Route                                                     | Method      | Purpose                          |
+| --------------------------------------------------------- | ----------- | -------------------------------- |
+| `/api/auth/register`, `/api/auth/login`, `/api/auth/logout` | POST      | Account and session              |
+| `/api/auth/me`                                             | GET         | `{ userId, username, trelloConnected }` |
+| `/api/auth/credentials`                                    | PATCH       | Change username and/or password  |
+| `/api/trello/credentials`                                  | PUT         | Save and validate key + token    |
+| `/api/trello/boards`                                       | GET         | Your open boards                 |
+| `/api/trello/boards/:boardId/lists`                        | GET         | Lists on a board                 |
+| `/api/trello/boards/:boardId/members`                      | GET         | Members of a board               |
+| `/api/trello/boards/:boardId/members/:memberId/cards`      | GET         | One member's open cards          |
+| `/api/trello/cards/bulk`                                   | POST        | One card per task, each with its own date |
+| `/api/trello/cards/bulk`                                   | PATCH       | `done` / `update` / `move`       |
 
-## Notes & limitations
+`POST` takes `tasks` as either plain titles or `{ name, dueDate }` objects.
+A task with no `dueDate` of its own falls back to the request's batch
+`dueDate`, and a request with neither means today, not "no due date". Dates are
+`yyyy-mm-dd` and are rejected with a 400 if they are not a real day.
 
-- The first time you run OCR, the browser downloads the English language model (~a few MB) from a CDN; after that it's cached for offline reuse. You do need internet access for that first run and for talking to Trello.
-- OCR handles printed and reasonably neat handwriting well; messy handwriting may need edits in the review step, which is why that step exists rather than posting straight to Trello.
-- Everything is scoped to English OCR (`eng`) by default. To add another language, change `recognizeText`'s call to `createWorker` in `src/lib/ocr.ts` (e.g. `createWorker("eng+hin")` — see [supported languages](https://github.com/naptha/tesseract.js/blob/master/docs/tesseract_lang_list.md)).
-- Due time defaults to 6pm local on the chosen date (see `DEFAULT_DUE_HOUR` in `src/lib/dates.ts`) — change it if you'd rather default to morning, etc.
+Bulk operations are partial-failure tolerant: they return a per-card
+`{ cardId, ok, error? }` and never abandon the rest of the batch. Concurrency
+is capped at 4 to stay inside Trello's 100-requests-per-10s-per-token limit,
+and 429s are retried with exponential backoff.
 
-## Project structure
+Moving cards to another board sends **both** `idBoard` and an `idList` that
+belongs to it. If the assignee is not a member of the target board, Trello
+would silently drop the assignment — so the move is refused with a warning and
+only proceeds once you confirm.
 
-```
-src/
-  app/
-    page.tsx          # main screen flow (capture → OCR → review → submit)
-    layout.tsx         # PWA metadata, icons, viewport
-    manifest.ts         # web app manifest
-  components/
-    CameraCapture.tsx   # take/choose a photo
-    OcrProgress.tsx      # OCR loading state
-    SettingsPanel.tsx        # Trello key/token/board/list setup
-    ServiceWorkerRegister.tsx # registers public/sw.js
-    LockScreen.tsx            # the shared-passcode gate
-    MemberPicker.tsx           # board members + the shared MemberAvatar
-    CameraCapture.tsx           # live react-webcam preview + capture
-    CardPreviewList.tsx          # Trello-card previews, editable, then create
-    DatePicker.tsx                # shadcn Calendar in a Popover
-  components/ui/                   # shadcn primitives (button, calendar, popover)
-  hooks/
-    useAuthConfig.ts  # loading | locked | unlocked + the saved config
-  lib/
-    trello.ts   # Trello REST API client (boards, lists, create card)
-    ocr.ts       # Tesseract.js wrapper + text-to-task-lines splitting
-    dates.ts      # Today/Tomorrow/custom date helpers
-    passcode.ts    # scrypt passcode hash + signed session token (pure)
-    image.ts        # data-URL snapshot -> File for the OCR pipeline
-    server.ts       # Mongo connection, env checks, session cookie
-    types.ts         # TrelloConfig, shared with the API routes
-  app/api/
-    unlock/     # POST: set (first run) or check the passcode, set the cookie
-    logout/      # POST: clear the cookie
-    config/       # GET/PUT: read and update the stored Trello config
-public/
-  sw.js          # minimal offline app-shell cache (never caches /api/*)
-  icons/          # app icons
-```
-
-## Checks
+## 4. Tests
 
 ```bash
-node auth.check.mjs      # passcode hashing + session token forgery/expiry
-node capture.check.mjs   # snapshot decoding + local-timezone date handling
-node sw.check.mjs        # service worker must never cache /api/*
+npm test              # unit + integration + component (vitest)
+npm run test:e2e      # system tests (playwright)
+npm run typecheck
+npm run lint
+npm run build
 ```
+
+**No test ever reaches real Trello.** Three independent guards:
+
+1. `TRELLO_API_BASE` is read on every call, so tests point the whole app at a
+   stub.
+2. MSW runs with `onUnhandledRequest: "error"` — an un-stubbed call fails the
+   test loudly.
+3. `tests/setup/common.ts` throws on any outbound request to `api.trello.com`,
+   and `tests/unit/guard.test.ts` asserts that guard actually fires.
+
+| Level       | Where                  | Against                                          |
+| ----------- | ---------------------- | ------------------------------------------------ |
+| Unit        | `tests/unit`           | Pure functions, nothing mocked because nothing is shared |
+| Integration | `tests/integration`    | Route handlers, real in-memory MongoDB, Trello stubbed with MSW — asserted on the captured **outbound** request |
+| Component   | `tests/component`      | React Testing Library + user-event                |
+| System      | `tests/e2e`            | The built app, in-memory MongoDB, and a **stateful fake Trello** (`tests/e2e/fake-trello.mjs`) |
+
+Route handlers are plain `(Request) => Response` functions — they read the
+session off the raw cookie header rather than `next/headers` — so integration
+tests call them directly with no server to boot.
+
+The system tests stub the camera with Chrome's
+`--use-file-for-fake-video-capture`, which only accepts y4m. Regenerate the
+fixture with:
+
+```bash
+node tests/e2e/make-fixture.mjs   # writes fixtures/tasks.y4m
+```
+
+OCR still runs for real against that video, so the system tests exercise the
+whole loop. The first run downloads Tesseract's English language data from a
+CDN.
+
+### Manual checklist (real Trello, on a throwaway board)
+
+Nothing automated touches real Trello, so these are worth doing by hand once:
+
+1. A real key and token save and validate
+2. Real boards and members load
+3. Photograph a real list → cards land in the right list, right person, right due date
+4. No date chosen → due today
+5. Bulk mark done shows up on the board
+6. Bulk move to another board keeps the assignee, and warns when they are not on it
+7. A 20+ card batch does not trip rate limiting
+
+## 5. Notes
+
+- **Mobile gestures.** Long-press is 500ms and cancels if the finger moves more
+  than 10px, so scrolling never selects. A completed hold buzzes
+  (`navigator.vibrate(10)`). Task rows suppress text selection and the iOS
+  callout menu.
+- **Motion.** Lists stagger in at 40ms per row, and collapse to instant under
+  `prefers-reduced-motion: reduce`.
+- **Service worker.** Only build assets and the signed-out `/login` shell are
+  cached. Navigations and RSC payloads always go to the network (falling back
+  to the login shell offline), because `/boards` and `/settings` render one
+  person's data and Cache Storage is script-readable and outlives signing out.

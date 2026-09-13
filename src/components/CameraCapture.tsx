@@ -18,6 +18,16 @@ export default function CameraCapture({ onCapture }: Props) {
   const [ready, setReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // onUserMedia fires when the stream is attached, which is earlier than the
+  // first decoded frame — enabling Capture there means the first tap can come
+  // back empty. Wait for actual frame data instead.
+  const handleUserMedia = useCallback(() => {
+    const video = webcamRef.current?.video;
+    if (!video) return;
+    if (video.readyState >= video.HAVE_CURRENT_DATA) return setReady(true);
+    video.addEventListener("loadeddata", () => setReady(true), { once: true });
+  }, []);
+
   const handleCapture = useCallback(() => {
     const shot = webcamRef.current?.getScreenshot();
     if (!shot) {
@@ -40,7 +50,7 @@ export default function CameraCapture({ onCapture }: Props) {
             // which costs OCR the detail it needs on handwriting.
             forceScreenshotSourceSize
             videoConstraints={VIDEO_CONSTRAINTS}
-            onUserMedia={() => setReady(true)}
+            onUserMedia={handleUserMedia}
             onUserMediaError={(e) =>
               setError(
                 typeof e === "string"

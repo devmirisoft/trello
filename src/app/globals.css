@@ -238,3 +238,61 @@ body {
     @apply font-sans;
   }
 }
+/* --- Mobile behaviour ----------------------------------------------------- */
+
+@layer base {
+  body {
+    /* The camera and task screens are a fixed app shell, not a document. */
+    overscroll-behavior-y: none;
+  }
+
+  /* Rows you can long-press must not start a text selection or raise iOS's
+     callout menu while the finger is held down. */
+  [data-longpress] {
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-touch-callout: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+}
+
+@utility safe-bottom {
+  padding-bottom: max(1rem, env(safe-area-inset-bottom));
+}
+
+@utility safe-top {
+  padding-top: max(0.75rem, env(safe-area-inset-top));
+}
+
+/* Staggered list reveal: each row sets --i and comes in 40ms after the one
+   above it, which reads as the list filling in rather than a spinner ending. */
+@keyframes row-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@utility row-in {
+  animation: row-in 240ms ease-out backwards;
+  animation-delay: calc(var(--i, 0) * 40ms);
+}
+
+/* Anyone who has asked for less motion gets the end state immediately —
+   including the staggered reveal above, which is the whole point of the
+   reduced-motion system test. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-delay: 0ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

@@ -52,3 +52,9 @@ export function fromLocalISODate(localISODate: string): Date {
   const [y, m, d] = localISODate.split("-").map(Number);
   return new Date(y, m - 1, d);
 }
+
+/** The `due` value to send Trello for a picker that may never have been
+ * opened: an untouched picker means today, not "no date". */
+export function resolveDueForTrello(localISODate?: string | null): string {
+  return dueDateForTrello(localISODate || todayLocalISODate());
+}

@@ -11,7 +11,19 @@ let sent: Record<string, unknown> | undefined;
 const groqStub = http.post(`${GROQ_BASE}/chat/completions`, async ({ request }) => {
   sent = (await request.json()) as Record<string, unknown>;
   return HttpResponse.json({
-    choices: [{ message: { content: "- call the plumber\n- email Sam" } }],
+    choices: [
+      {
+        message: {
+          content: JSON.stringify({
+            lines: [
+              { text: "call the plumber about the", continuesPrevious: false },
+              { text: "leak under the sink", continuesPrevious: true },
+              { text: "email Sam", continuesPrevious: false },
+            ],
+          }),
+        },
+      },
+    ],
   });
 });
 
@@ -54,10 +66,13 @@ describe("POST /api/scan", () => {
     expect(sent).toBeUndefined();
   });
 
-  it("sends the photo as a data URL and returns the model's text", async () => {
+  it("sends the photo as a data URL and returns one line per whole task", async () => {
     const res = await scan(scanReq(await signIn()));
     expect(res.status).toBe(200);
-    expect(await json(res)).toEqual({ text: "- call the plumber\n- email Sam" });
+    // The wrapped first task comes back merged, not split into two cards.
+    expect(await json(res)).toEqual({
+      text: "call the plumber about the leak under the sink\nemail Sam",
+    });
 
     const content = (sent as { messages: { content: { type: string; image_url?: { url: string } }[] }[] })
       .messages[0].content;

@@ -45,7 +45,9 @@ export default function CameraCapture({ onCapture }: Props) {
             ref={webcamRef}
             audio={false}
             screenshotFormat="image/jpeg"
-            screenshotQuality={0.92}
+            // Groq bills the image by resolution, not by file size, so JPEG
+            // re-compression buys nothing and smears thin cursive strokes.
+            screenshotQuality={1}
             // Without this the snapshot is downscaled to the preview's size,
             // which costs OCR the detail it needs on handwriting.
             forceScreenshotSourceSize
@@ -76,7 +78,7 @@ export default function CameraCapture({ onCapture }: Props) {
       </div>
 
       <p className="max-w-xs text-center text-sm text-muted-foreground">
-        Frame your notes or to-do list. Each line becomes a separate Trello
+        Frame your notes or to-do list. Each task becomes a separate Trello
         card.
       </p>
 

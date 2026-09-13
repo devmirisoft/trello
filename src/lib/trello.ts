@@ -14,6 +14,17 @@ export type TrelloList = {
   name: string;
 };
 
+export type TrelloMember = {
+  id: string;
+  fullName: string;
+  username: string;
+  initials: string;
+  /** Base URL with no size suffix. Absent on some accounts — fall back to
+   * avatarHash, which every avatared member has. */
+  avatarUrl?: string | null;
+  avatarHash?: string | null;
+};
+
 export class TrelloError extends Error {}
 
 function authParams(apiKey: string, token: string) {
@@ -68,16 +79,49 @@ export async function fetchLists(
   );
 }
 
+export async function fetchMembers(
+  apiKey: string,
+  token: string,
+  boardId: string
+): Promise<TrelloMember[]> {
+  // `fields=all` rather than a hand-written list: the nested board-members
+  // resource rejects field names the top-level member resource accepts, and a
+  // 400 here used to strand setup on a picker that could never be satisfied.
+  return trelloFetch(`/boards/${boardId}/members?fields=all`, apiKey, token);
+}
+
+/** Fully-resolved avatar image URL, or null for members who never set one
+ * (render initials instead). Trello gives a sizeless base URL, an avatarHash,
+ * or neither, so both shapes are handled here rather than at each call site. */
+export function avatarSrc(
+  member: Pick<TrelloMember, "avatarUrl" | "avatarHash"> & { id?: string },
+  size: 30 | 50 | 170 = 50
+): string | null {
+  if (member.avatarUrl) return `${member.avatarUrl}/${size}.png`;
+  if (member.avatarHash && member.id) {
+    return `https://trello-members.s3.amazonaws.com/${member.id}/${member.avatarHash}/${size}.png`;
+  }
+  return null;
+}
+
 export async function createCard(
   apiKey: string,
   token: string,
-  opts: { listId: string; name: string; desc?: string; due?: string }
+  opts: {
+    listId: string;
+    name: string;
+    desc?: string;
+    due?: string;
+    idMembers?: string[];
+  }
 ): Promise<{ id: string; shortUrl: string; name: string }> {
   const params = authParams(apiKey, token);
   params.set("idList", opts.listId);
   params.set("name", opts.name);
   if (opts.desc) params.set("desc", opts.desc);
   if (opts.due) params.set("due", opts.due);
+  // Trello takes idMembers as a comma-separated list of member ids.
+  if (opts.idMembers?.length) params.set("idMembers", opts.idMembers.join(","));
 
   const res = await fetch(`${BASE}/cards?${params.toString()}`, {
     method: "POST",

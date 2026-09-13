@@ -39,7 +39,7 @@ assert.equal(intercepts(`${ORIGIN}/_next/static/chunks/main.js`), true, "assets 
 assert.equal(intercepts(`${ORIGIN}/manifest.webmanifest`), true, "manifest should be cached");
 // Never cached.
 assert.equal(intercepts(`${ORIGIN}/api/config`), false, "/api/config holds Trello credentials");
-assert.equal(intercepts(`${ORIGIN}/api/auth`, "POST"), false, "writes must reach the server");
+assert.equal(intercepts(`${ORIGIN}/api/unlock`, "POST"), false, "writes must reach the server");
 assert.equal(intercepts(`${ORIGIN}/`, "POST"), false, "non-GET must reach the server");
 assert.equal(intercepts("https://api.trello.com/1/cards"), false, "cross-origin must pass through");
 

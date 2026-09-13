@@ -7,6 +7,14 @@ const nextConfig: NextConfig = {
   // The MongoDB driver loads optional native/dynamic deps at runtime, so it
   // must stay outside the server bundle.
   serverExternalPackages: ["mongodb"],
+  experimental: {
+    // Something on this machine deletes .sst files out of
+    // .next/dev/cache/turbopack mid-run (antivirus scanning Downloads is the
+    // usual suspect), and turbo-tasks aborts the process when a restore fails.
+    // ponytail: costs a cold start each `next dev`; re-enable once the project
+    // lives outside a scanned directory.
+    turbopackFileSystemCacheForDev: false,
+  },
 };
 
 export default nextConfig;

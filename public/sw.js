@@ -27,9 +27,9 @@ self.addEventListener("fetch", (event) => {
   const { request } = event;
 
   // Never intercept cross-origin requests (Trello, OCR language data, fonts)
-  // or /api/* — GET /api/config answers with this account's Trello key and
-  // token, and a cache-first copy in script-readable Cache Storage would
-  // survive sign-out and leak into the next account signed in on the device.
+  // or /api/* — GET /api/config answers with the stored Trello key and token,
+  // and a cache-first copy in script-readable Cache Storage would survive
+  // locking the app and serve those credentials to whoever opens it next.
   const url = new URL(request.url);
   if (
     request.method !== "GET" ||

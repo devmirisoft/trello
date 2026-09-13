@@ -1,59 +1,84 @@
 "use client";
 
-import { useRef } from "react";
+import { useCallback, useRef, useState } from "react";
+import Webcam from "react-webcam";
+import { Camera } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { dataUrlToFile } from "@/lib/image";
 
 type Props = {
   onCapture: (file: File) => void;
 };
 
-export default function CameraCapture({ onCapture }: Props) {
-  const cameraInputRef = useRef<HTMLInputElement>(null);
-  const galleryInputRef = useRef<HTMLInputElement>(null);
+// Prefer the rear camera on phones; desktops just get their only one.
+const VIDEO_CONSTRAINTS: MediaTrackConstraints = { facingMode: "environment" };
 
-  function handleChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (file) onCapture(file);
-    e.target.value = "";
-  }
+export default function CameraCapture({ onCapture }: Props) {
+  const webcamRef = useRef<Webcam>(null);
+  const [ready, setReady] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleCapture = useCallback(() => {
+    const shot = webcamRef.current?.getScreenshot();
+    if (!shot) {
+      setError("Couldn't grab a frame from the camera. Try again.");
+      return;
+    }
+    onCapture(dataUrlToFile(shot, `snap-${Date.now()}.jpg`));
+  }, [onCapture]);
 
   return (
-    <div className="flex flex-col items-center gap-4 text-center">
-      <div className="w-24 h-24 rounded-full bg-neutral-100 flex items-center justify-center text-4xl">
-        📸
+    <div className="mx-auto flex w-full max-w-md flex-col items-center gap-4">
+      <div className="relative w-full overflow-hidden rounded-xl border bg-black aspect-[3/4]">
+        {!error && (
+          <Webcam
+            ref={webcamRef}
+            audio={false}
+            screenshotFormat="image/jpeg"
+            screenshotQuality={0.92}
+            // Without this the snapshot is downscaled to the preview's size,
+            // which costs OCR the detail it needs on handwriting.
+            forceScreenshotSourceSize
+            videoConstraints={VIDEO_CONSTRAINTS}
+            onUserMedia={() => setReady(true)}
+            onUserMediaError={(e) =>
+              setError(
+                typeof e === "string"
+                  ? e
+                  : e.name === "NotAllowedError"
+                    ? "Camera access was blocked. Allow it in your browser's site settings, then reload."
+                    : "No camera available on this device."
+              )
+            }
+            className="h-full w-full object-cover"
+          />
+        )}
+        {error && (
+          <p className="absolute inset-0 flex items-center justify-center p-6 text-center text-sm text-white">
+            {error}
+          </p>
+        )}
+        {!ready && !error && (
+          <p className="absolute inset-0 flex items-center justify-center text-sm text-white/70">
+            Starting camera…
+          </p>
+        )}
       </div>
-      <p className="text-sm text-neutral-500 max-w-xs">
-        Photograph your notes, whiteboard, or to-do list. Each line becomes a
-        separate Trello card.
+
+      <p className="max-w-xs text-center text-sm text-muted-foreground">
+        Frame your notes or to-do list. Each line becomes a separate Trello
+        card.
       </p>
 
-      <input
-        ref={cameraInputRef}
-        type="file"
-        accept="image/*"
-        capture="environment"
-        className="hidden"
-        onChange={handleChange}
-      />
-      <input
-        ref={galleryInputRef}
-        type="file"
-        accept="image/*"
-        className="hidden"
-        onChange={handleChange}
-      />
-
-      <button
-        className="w-full max-w-xs rounded-lg bg-black text-white py-3 font-medium"
-        onClick={() => cameraInputRef.current?.click()}
+      <Button
+        size="lg"
+        className="w-full"
+        disabled={!ready || !!error}
+        onClick={handleCapture}
       >
-        Take a photo
-      </button>
-      <button
-        className="w-full max-w-xs rounded-lg border py-3 font-medium"
-        onClick={() => galleryInputRef.current?.click()}
-      >
-        Choose from photos
-      </button>
+        <Camera data-icon="inline-start" />
+        Capture
+      </Button>
     </div>
   );
 }

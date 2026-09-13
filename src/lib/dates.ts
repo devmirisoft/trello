@@ -45,3 +45,10 @@ export function formatFriendly(localISODate: string): string {
     year: "numeric",
   });
 }
+
+// yyyy-mm-dd -> a Date at local midnight, the inverse of toLocalISODate.
+// `new Date("2026-09-12")` would parse as UTC and can land on the day before.
+export function fromLocalISODate(localISODate: string): Date {
+  const [y, m, d] = localISODate.split("-").map(Number);
+  return new Date(y, m - 1, d);
+}
